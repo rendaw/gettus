@@ -8,7 +8,15 @@ import org.xnio.XnioWorker;
 import java.net.URI;
 import java.util.concurrent.CompletableFuture;
 
+/**
+ * A HTTP client that uses Futures to return downloaded response Headers and Body
+ */
 public class Gettus extends GettusBase<Gettus> {
+	/**
+	 * Start here
+	 *
+	 * @param uri
+	 */
 	public Gettus(final URI uri) {
 		super(uri);
 	}
@@ -30,6 +38,9 @@ public class Gettus extends GettusBase<Gettus> {
 			super(connection, exchange, response);
 		}
 
+		/**
+		 * @return a future for the body of the response
+		 */
 		public CompletableFuture<Body> body() {
 			final CompletableFuture<Body> out = new CompletableFuture<>();
 			body(out);
@@ -44,6 +55,12 @@ public class Gettus extends GettusBase<Gettus> {
 		return new Headers(connection, exchange, response);
 	}
 
+	/**
+	 * Send the request
+	 *
+	 * @param worker
+	 * @return a future for the headers of the response
+	 */
 	public CompletableFuture<Headers> send(final XnioWorker worker) {
 		final CompletableFuture<Headers> out = new CompletableFuture<>();
 		send(worker, out);

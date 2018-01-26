@@ -9,7 +9,16 @@ import org.xnio.XnioWorker;
 
 import java.net.URI;
 
+/**
+ * A HTTP client that suspends the current coroutine when sent until the response Headers and Body have been received
+ * or an error occurs.
+ */
 public class Cogettus extends GettusBase<Cogettus> {
+	/**
+	 * Start here
+	 *
+	 * @param uri
+	 */
 	public Cogettus(final URI uri) {
 		super(uri);
 	}
@@ -31,6 +40,12 @@ public class Cogettus extends GettusBase<Cogettus> {
 			super(connection, exchange, response);
 		}
 
+		/**
+		 * Suspend the coroutine until the response body is received or an error occurs.
+		 *
+		 * @return response body
+		 * @throws SuspendExecution
+		 */
 		public Body body() throws SuspendExecution {
 			final Coroutine coroutine = Coroutine.getActiveCoroutine();
 			return Coroutine.yieldThen(() -> {
@@ -46,6 +61,12 @@ public class Cogettus extends GettusBase<Cogettus> {
 		return new Headers(connection, exchange, response);
 	}
 
+	/**
+	 * Send the request and suspend the coroutine until the response headers are received or an error occurs.
+	 *
+	 * @return response headers
+	 * @throws SuspendExecution
+	 */
 	public Headers send(final XnioWorker worker) throws SuspendExecution {
 		final Coroutine coroutine = Coroutine.getActiveCoroutine();
 		return Coroutine.yieldThen(() -> {

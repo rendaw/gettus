@@ -6,9 +6,9 @@ threads.  There are currently two client flavors:
 1. Gettus - an interface based on `CompletableFuture`s
 2. Cogettus (separate artifact) - an interface for use with coroutines
 
-This project is fairly incomplete - there's no built in session management, proxy support, or authentication helpers
-but it is entirely usable.  I've interacted with AWS via their HTTP API and a number of websites using Gettus with
-no issues so far.  If you'd like to try your hand at implementing these features though PRs welcome.
+This project is fairly incomplete - there's no built in session management, proxy support, or redirects
+but it is entirely usable.  I've interacted with AWS via their HTTP API and a number of websites using Gettus and
+encountered no issues so far.  If you'd like to try your hand at implementing these features though PRs welcome.
 
 ## Example (Cogettus)
 

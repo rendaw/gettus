@@ -58,14 +58,42 @@ public abstract class GettusBase<I> {
 	private boolean dontCheckCerts = false;
 	private final String connectionKey;
 
+	/**
+	 * Formats a string using `String.format` and returns it as a URI.
+	 *
+	 * @param pattern
+	 * @param args
+	 * @return
+	 */
 	public static URI formatURI(final String pattern, final Object... args) {
 		return uncheck(() -> new URI(String.format(pattern, args)));
 	}
 
+	/**
+	 * Called when an asynchronous action completes.
+	 *
+	 * @param resolver data passed to send() or body()
+	 * @param value    the downloaded Headers or Body object
+	 */
 	protected abstract void resolve(Object resolver, Object value);
 
+	/**
+	 * Called when an asynchronous action fails with an error.
+	 *
+	 * @param resolver  data passed to send() or body()
+	 * @param exception the error
+	 */
 	protected abstract void resolveException(Object resolver, RuntimeException exception);
 
+	/**
+	 * For use when extending, to provide an alt Headers class with method overrides.
+	 *
+	 * @param connection Pass this to the constructor
+	 * @param exchange   Pass this to the constructor
+	 * @param response   Pass this to the constructor
+	 * @param <K>
+	 * @return
+	 */
 	protected abstract <K> Headers<K> createHeaders(
 			final ClientConnection connection, final ClientExchange exchange, final ClientResponse response
 	);
@@ -74,6 +102,9 @@ public abstract class GettusBase<I> {
 
 	}
 
+	/**
+	 * Raised if `check()` fails.
+	 */
 	public static class ResponseCodeError extends RuntimeException {
 
 		public ResponseCodeError(final int code) {
@@ -127,16 +158,35 @@ public abstract class GettusBase<I> {
 		request.setPath(path.toString());
 	}
 
+	/**
+	 * Set the request method (GET, POST, etc)
+	 *
+	 * @param method
+	 * @return
+	 */
 	public I method(final HttpString method) {
 		request.setMethod(method);
 		return (I) this;
 	}
 
+	/**
+	 * Set the request body
+	 *
+	 * @param body
+	 * @return
+	 */
 	public I body(final byte[] body) {
 		this.body = body;
 		return (I) this;
 	}
 
+	/**
+	 * Set the request body as JSON serialized from an object
+	 *
+	 * @param jackson
+	 * @param o
+	 * @return
+	 */
 	public I bodyJson(final ObjectMapper jackson, final Object o) {
 		try {
 			return body(jackson.writeValueAsBytes(o));
@@ -145,10 +195,22 @@ public abstract class GettusBase<I> {
 		}
 	}
 
+	/**
+	 * Set the request body as JSON serialized from an object
+	 *
+	 * @param o
+	 * @return
+	 */
 	public I bodyJson(final Object o) {
 		return bodyJson(jackson, o);
 	}
 
+	/**
+	 * Use a functor to generate a JSON body
+	 *
+	 * @param write
+	 * @return
+	 */
 	public I bodyJson(final Common.Consumer2<JsonGenerator> write) {
 		final ByteArrayOutputStream body = new ByteArrayOutputStream();
 		try (final JsonGenerator bodyWriter = new JsonFactory().createGenerator(body)) {
@@ -159,16 +221,36 @@ public abstract class GettusBase<I> {
 		return body(body.toByteArray());
 	}
 
+	/**
+	 * Set request headers
+	 *
+	 * @param headers
+	 * @return
+	 */
 	public I headers(final Map<HttpString, String> headers) {
 		headers.forEach((k, v) -> request.getRequestHeaders().add(k, v));
 		return (I) this;
 	}
 
+	/**
+	 * Set an individual request header
+	 *
+	 * @param name
+	 * @param value
+	 * @return
+	 */
 	public I header(final HttpString name, final String value) {
 		request.getRequestHeaders().add(name, value);
 		return (I) this;
 	}
 
+	/**
+	 * Set basic-auth AUTHORIZATION header
+	 *
+	 * @param user
+	 * @param password
+	 * @return
+	 */
 	public I basicAuth(final String user, final String password) {
 		return header(io.undertow.util.Headers.AUTHORIZATION, String.format(
 				"Basic %s",
@@ -178,21 +260,44 @@ public abstract class GettusBase<I> {
 		));
 	}
 
+	/**
+	 * Set the timeout for the request. The total time before timeout occurs may be longer than this value.
+	 *
+	 * @param seconds
+	 * @return
+	 */
 	public I timeout(final int seconds) {
 		this.timeout = seconds;
 		return (I) this;
 	}
 
+	/**
+	 * Limit response size - raise an error and stop downloading if this size is exceeded.
+	 *
+	 * @param size
+	 * @return
+	 */
 	public I limitSize(final int size) {
 		this.limitSize = size;
 		return (I) this;
 	}
 
+	/**
+	 * Ignore SSL cert validation errors.
+	 *
+	 * @return
+	 */
 	public I dontCheckCerts() {
 		this.dontCheckCerts = true;
 		return (I) this;
 	}
 
+	/**
+	 * Send the request. resolve/resolveError will be called when the headers are downloaded or an error occus.
+	 *
+	 * @param worker
+	 * @param resolver Passed to resolve/resolveError
+	 */
 	public void send(final XnioWorker worker, final Object resolver) {
 		request
 				.getRequestHeaders()
@@ -393,6 +498,11 @@ public abstract class GettusBase<I> {
 		}
 	}
 
+	/**
+	 * The response headers
+	 *
+	 * @param <K> For overriding - the specific Headers derivation
+	 */
 	public class Headers<K> {
 		private final ClientConnection connection;
 		private final ClientResponse response;
@@ -406,14 +516,28 @@ public abstract class GettusBase<I> {
 			this.response = response;
 		}
 
+		/**
+		 * @return the response code
+		 */
 		public int code() {
 			return response.getResponseCode();
 		}
 
+		/**
+		 * Get a header value by name
+		 *
+		 * @param name
+		 * @return
+		 */
 		public String header(final String name) {
 			return response.getResponseHeaders().getFirst(name);
 		}
 
+		/**
+		 * Raise an error if a non 2XX/3XX code was received
+		 *
+		 * @return
+		 */
 		public K check() {
 			if (code() < 200 || code() >= 400) {
 				close();
@@ -422,15 +546,31 @@ public abstract class GettusBase<I> {
 			return (K) this;
 		}
 
+		/**
+		 * Close the connection
+		 *
+		 * @return
+		 */
 		public K close() {
 			release(connection);
 			return (K) this;
 		}
 
+		/**
+		 * Raise an error for the response status code
+		 *
+		 * @return
+		 */
 		public ResponseCodeError errorForCode() {
 			return new ResponseCodeError(code());
 		}
 
+		/**
+		 * Raise an error if the response status code matches any listed code
+		 *
+		 * @param codes
+		 * @return
+		 */
 		public K checkOnly(final int... codes) {
 			if (Arrays.stream(codes).anyMatch(c -> code() == c)) {
 				close();
@@ -439,6 +579,12 @@ public abstract class GettusBase<I> {
 			return (K) this;
 		}
 
+		/**
+		 * Wait for the body. resolve/resolveError will be called when the body is downloaded or an error occus.
+		 *
+		 * @param worker
+		 * @param resolver Passed to resolve/resolveError
+		 */
 		void body(final Object resolver) {
 			final String contentLengthString =
 					exchange.getResponse().getResponseHeaders().getFirst(io.undertow.util.Headers.CONTENT_LENGTH);
@@ -546,6 +692,9 @@ public abstract class GettusBase<I> {
 
 	private static final Pattern charsetPattern = Pattern.compile("charset=([^ ]+)");
 
+	/**
+	 * The response body
+	 */
 	public class Body {
 		private final ClientResponse response;
 		private final ByteArrayOutputStream body;
@@ -555,18 +704,37 @@ public abstract class GettusBase<I> {
 			this.body = body;
 		}
 
+		/**
+		 * The response status code
+		 *
+		 * @return
+		 */
 		public int code() {
 			return response.getResponseCode();
 		}
 
+		/**
+		 * Get a header value by name
+		 *
+		 * @param name
+		 * @return
+		 */
 		public String header(final String name) {
 			return response.getResponseHeaders().getFirst(name);
 		}
 
+		/**
+		 * Return the body as a stream. The body is completely in memory at this point.
+		 *
+		 * @return
+		 */
 		public InputStream stream() {
 			return new ByteArrayInputStream(body.toByteArray());
 		}
 
+		/**
+		 * @return the charset if specified in the headers, otherwise null.
+		 */
 		public Charset explicitCharset() {
 			final String header = response.getResponseHeaders().getFirst(io.undertow.util.Headers.CONTENT_TYPE);
 			if (header == null)
@@ -581,6 +749,9 @@ public abstract class GettusBase<I> {
 			}
 		}
 
+		/**
+		 * @return a best guess about the document charset
+		 */
 		public Charset charset() {
 			final Charset charset = explicitCharset();
 			if (charset != null)
@@ -588,10 +759,20 @@ public abstract class GettusBase<I> {
 			return Charset.forName("ISO-8859-1");
 		}
 
+		/**
+		 * @return the body as a string
+		 */
 		public String text() {
 			return new String(body.toByteArray(), charset());
 		}
 
+		/**
+		 * Deserialize a json body to an object
+		 *
+		 * @param klass
+		 * @param <T>
+		 * @return
+		 */
 		public <T> T json(final Class<T> klass) {
 			try {
 				return jackson.readValue(stream(), klass);
@@ -600,6 +781,11 @@ public abstract class GettusBase<I> {
 			}
 		}
 
+		/**
+		 * Deserialize the json body as a generic json tree
+		 *
+		 * @return
+		 */
 		public JsonNode json() {
 			try {
 				return jackson.readTree(stream());
@@ -608,6 +794,11 @@ public abstract class GettusBase<I> {
 			}
 		}
 
+		/**
+		 * Raise an error if the status code isn't 2XX or 3XX. The error includes the response body text.
+		 *
+		 * @return
+		 */
 		public Body check() {
 			if (code() < 200 || code() >= 400) {
 				throw new ResponseCodeError(code(), new String(body.toByteArray(), StandardCharsets.UTF_8));

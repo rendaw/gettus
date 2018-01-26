@@ -2,6 +2,9 @@ package com.zarbosoft.gettus;
 
 import java.nio.charset.StandardCharsets;
 
+/**
+ * A generic error class for Gettus-related errors.
+ */
 public class GettusError extends RuntimeException {
 	private final GettusBase gettus;
 
