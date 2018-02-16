@@ -40,6 +40,7 @@ import java.util.Base64;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -57,6 +58,7 @@ public abstract class GettusBase<I> {
 	private static final ByteBufferPool bufferPool;
 	private boolean dontCheckCerts = false;
 	private final String connectionKey;
+	private volatile XnioExecutor.Key timeoutKey;
 
 	/**
 	 * Formats a string using `String.format` and returns it as a URI.
@@ -261,7 +263,8 @@ public abstract class GettusBase<I> {
 	}
 
 	/**
-	 * Set the timeout for the request. The total time before timeout occurs may be longer than this value.
+	 * Abort the operation if no progress occurs for this duration in seconds.  Note that the total time before the
+	 * request aborts may be longer than this value.
 	 *
 	 * @param seconds
 	 * @return
@@ -328,6 +331,7 @@ public abstract class GettusBase<I> {
 		final XnioSsl ssl =
 				new UndertowXnioSsl(worker.getXnio(), OptionMap.create(Options.USE_DIRECT_BUFFERS, true), sslContext);
 		try {
+			initializeTimeout(worker, resolver);
 			do {
 				final ConcurrentDirectDeque<ClientConnection> queue = connectionPool.get(connectionKey);
 				if (queue == null)
@@ -358,6 +362,47 @@ public abstract class GettusBase<I> {
 		}
 	}
 
+	private void initializeTimeout(final XnioWorker worker, final Object resolver) {
+		if (timeout <= 0)
+			return;
+		this.timeoutKey = worker.getIoThread().executeAfter(() -> {
+			resolveException(resolver, new GettusError(this, String.format("Request timeout")));
+		}, timeout, TimeUnit.SECONDS);
+	}
+
+	private boolean extendTimeout(final XnioIoThread thread, final Object resolver) {
+		if (timeout <= 0)
+			return true;
+		if (timeoutKey != null && !timeoutKey.remove())
+			return false;
+		this.timeoutKey = thread.executeAfter(() -> {
+			resolveException(resolver, new GettusError(this, String.format("Request timeout")));
+		}, timeout, TimeUnit.SECONDS);
+		return true;
+	}
+
+	private boolean extendTimeout(final XnioWorker worker, final Object resolver) {
+		return extendTimeout(worker.getIoThread(), resolver);
+	}
+
+	private void resolve1(final Object resolver, final Object value) {
+		if (timeoutKey != null) {
+			if (!timeoutKey.remove())
+				return;
+			timeoutKey = null;
+		}
+		resolve(resolver, value);
+	}
+
+	private void resolveException1(final Object resolver, final RuntimeException error) {
+		if (timeoutKey != null) {
+			if (!timeoutKey.remove())
+				return;
+			timeoutKey = null;
+		}
+		resolveException(resolver, error);
+	}
+
 	private class StageGetConnection implements ClientCallback<ClientConnection> {
 
 		private final Object resolver;
@@ -369,13 +414,15 @@ public abstract class GettusBase<I> {
 		@Override
 		public void completed(final ClientConnection result) {
 			logger.debug(String.format("CONNECT: COMPLETED"));
+			if (!extendTimeout(result.getWorker(), resolver))
+				return;
 			result.sendRequest(request, new StageSendRequest(resolver, result));
 		}
 
 		@Override
 		public void failed(final IOException e) {
 			logger.debug(String.format("CONNECT: FAILED"));
-			resolveException(resolver, new GettusError(GettusBase.this, e));
+			resolveException1(resolver, new GettusError(GettusBase.this, e));
 		}
 	}
 
@@ -392,6 +439,8 @@ public abstract class GettusBase<I> {
 		@Override
 		public void completed(final ClientExchange exchange) {
 			logger.debug(String.format("SEND REQUEST: COMPLETED"));
+			if (!extendTimeout(exchange.getConnection().getWorker(), resolver))
+				return;
 			if (body != null) {
 				final ByteBuffer bytes = ByteBuffer.wrap(body);
 				final StreamSinkChannel channel = exchange.getRequestChannel();
@@ -414,19 +463,17 @@ public abstract class GettusBase<I> {
 					pooled.getBuffer().flip();
 					++i;
 				}
-				final StageWriteBody writeBody = new StageWriteBody(pooledBuffers, bufs);
+				final StageWriteBody writeBody = new StageWriteBody(pooledBuffers, bufs, resolver);
 				writeBody.handleEvent(channel);
 			}
-			final StageWaitForResponse stageWaitForResponse = new StageWaitForResponse(resolver, connection, exchange);
-			exchange.getResponseChannel().getCloseSetter().set(stageWaitForResponse);
-			exchange.setResponseListener(stageWaitForResponse);
+			exchange.setResponseListener(new StageWaitForResponse(resolver, connection, exchange));
 		}
 
 		@Override
 		public void failed(final IOException e) {
 			logger.debug(String.format("SEND REQUEST: FAILED %s", e));
 			release(connection);
-			resolveException(resolver, new GettusError(GettusBase.this, e));
+			resolveException1(resolver, new GettusError(GettusBase.this, e));
 		}
 	}
 
@@ -435,10 +482,14 @@ public abstract class GettusBase<I> {
 		private final PooledByteBuffer[] pooledBuffers;
 		private final ByteBuffer[] bufs;
 		private boolean first = true;
+		private final Object resolver;
 
-		public StageWriteBody(final PooledByteBuffer[] pooledBuffers, final ByteBuffer[] bufs) {
+		public StageWriteBody(
+				final PooledByteBuffer[] pooledBuffers, final ByteBuffer[] bufs, final Object resolver
+		) {
 			this.pooledBuffers = pooledBuffers;
 			this.bufs = bufs;
+			this.resolver = resolver;
 		}
 
 		private void clean(final StreamSinkChannel channel) {
@@ -459,6 +510,10 @@ public abstract class GettusBase<I> {
 		@Override
 		public void handleEvent(final StreamSinkChannel channel) {
 			logger.debug(String.format("WRITE BODY: EVENT"));
+			if (!extendTimeout(channel.getIoThread(), resolver)) {
+				clean(channel);
+				return;
+			}
 			try {
 				final long remaining = Buffers.remaining(bufs);
 				long written = 0;
@@ -506,7 +561,7 @@ public abstract class GettusBase<I> {
 		public void completed(final ClientExchange exchange) {
 			exchange.getResponseChannel().getCloseSetter().set(null);
 			logger.debug(String.format("WAIT FOR RESPONSE: COMPLETED"));
-			resolve(resolver, createHeaders(connection, exchange, exchange.getResponse()));
+			resolve1(resolver, createHeaders(connection, exchange, exchange.getResponse()));
 		}
 
 		@Override
@@ -514,7 +569,7 @@ public abstract class GettusBase<I> {
 			exchange.getResponseChannel().getCloseSetter().set(null);
 			logger.debug(String.format("WAIT FOR RESPONSE: FAILED %s", e));
 			release(connection);
-			resolveException(resolver, new GettusError(GettusBase.this, e));
+			resolveException1(resolver, new GettusError(GettusBase.this, e));
 		}
 
 		@Override
@@ -631,6 +686,7 @@ public abstract class GettusBase<I> {
 					throw new ResponseTooLargeError();
 				}
 			}
+			initializeTimeout(exchange.getConnection().getWorker(), resolver);
 			try {
 				final StreamSourceChannel channel = exchange.getResponseChannel();
 				uncheck(() -> channel.setOption(READ_TIMEOUT, timeout));
@@ -661,7 +717,7 @@ public abstract class GettusBase<I> {
 					final Object resolver1 = resolver;
 					worker.submit(() -> {
 						try {
-							resolve(resolver1, new Body(response, body));
+							resolve1(resolver1, new Body(response, body));
 						} catch (final Throwable t) {
 							logger.error("Unhandled exception, shutting down executor", t);
 							worker.shutdown();
@@ -676,6 +732,8 @@ public abstract class GettusBase<I> {
 			@Override
 			public void handleEvent(final StreamSourceChannel channel) {
 				logger.debug(String.format("READ BODY: EVENT"));
+				if (!extendTimeout(exchange.getConnection().getWorker(), resolver))
+					return;
 				final PooledByteBuffer pooled = bufferPool.allocate();
 				final ByteBuffer buffer = pooled.getBuffer();
 				try {
@@ -699,13 +757,13 @@ public abstract class GettusBase<I> {
 									body.write(buffer.get());
 								}
 								if (limitSize > 0 && body.size() > limitSize) {
-									resolveException(resolver, new ResponseTooLargeError());
+									resolveException1(resolver, new ResponseTooLargeError());
 									resolver = null;
 									return;
 								}
 							}
 						} catch (final IOException e) {
-							resolveException(resolver, new GettusError(GettusBase.this, e));
+							resolveException1(resolver, new GettusError(GettusBase.this, e));
 							return;
 						}
 					} while (true);
