@@ -337,9 +337,12 @@ public abstract class GettusBase<I> {
 					connectionPool.remove(queue); // Race condition, but missed connections should clean up eventually
 				if (connection == null || !connection.isOpen())
 					break;
+				logger.debug("GA1");
 				connection.sendRequest(request, new StageSendRequest(resolver, connection));
+				logger.debug("GA2");
 				return;
 			} while (false);
+			logger.debug("GA3");
 			UndertowClient.getInstance().
 					connect(
 							new StageGetConnection(resolver),
@@ -349,6 +352,7 @@ public abstract class GettusBase<I> {
 							bufferPool,
 							OptionMap.builder().set(UndertowOptions.IDLE_TIMEOUT, timeout).getMap()
 					);
+			logger.debug("GA4");
 		} catch (final Exception e) {
 			throw new GettusError(this, e);
 		}
@@ -364,11 +368,13 @@ public abstract class GettusBase<I> {
 
 		@Override
 		public void completed(final ClientConnection result) {
+			logger.debug(String.format("CONNECT: COMPLETED"));
 			result.sendRequest(request, new StageSendRequest(resolver, result));
 		}
 
 		@Override
 		public void failed(final IOException e) {
+			logger.debug(String.format("CONNECT: FAILED"));
 			resolveException(resolver, new GettusError(GettusBase.this, e));
 		}
 	}
