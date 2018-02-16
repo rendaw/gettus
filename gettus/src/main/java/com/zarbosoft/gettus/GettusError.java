@@ -8,8 +8,13 @@ import java.nio.charset.StandardCharsets;
 public class GettusError extends RuntimeException {
 	private final GettusBase gettus;
 
-	public GettusError(final GettusBase gettus, final String message, final Throwable e) {
-		super(message, e);
+	public GettusError(final GettusBase gettus, final Throwable e, final String message, final Object... arguments) {
+		super(String.format(message, arguments), e);
+		this.gettus = gettus;
+	}
+
+	public GettusError(final GettusBase gettus, final String message, final Object... arguments) {
+		super(String.format(message, arguments));
 		this.gettus = gettus;
 	}
 

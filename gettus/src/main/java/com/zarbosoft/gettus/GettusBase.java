@@ -385,6 +385,7 @@ public abstract class GettusBase<I> {
 
 		@Override
 		public void completed(final ClientExchange exchange) {
+			logger.debug(String.format("SEND REQUEST: COMPLETED"));
 			if (body != null) {
 				final ByteBuffer bytes = ByteBuffer.wrap(body);
 				final StreamSinkChannel channel = exchange.getRequestChannel();
@@ -410,11 +411,14 @@ public abstract class GettusBase<I> {
 				final StageWriteBody writeBody = new StageWriteBody(pooledBuffers, bufs);
 				writeBody.handleEvent(channel);
 			}
-			exchange.setResponseListener(new StageWaitForResponse(resolver, connection));
+			final StageWaitForResponse stageWaitForResponse = new StageWaitForResponse(resolver, connection, exchange);
+			exchange.getResponseChannel().getCloseSetter().set(stageWaitForResponse);
+			exchange.setResponseListener(stageWaitForResponse);
 		}
 
 		@Override
 		public void failed(final IOException e) {
+			logger.debug(String.format("SEND REQUEST: FAILED %s", e));
 			release(connection);
 			resolveException(resolver, new GettusError(GettusBase.this, e));
 		}
@@ -432,6 +436,7 @@ public abstract class GettusBase<I> {
 		}
 
 		private void clean(final StreamSinkChannel channel) {
+			logger.debug(String.format("WRITE BODY: CLEAN"));
 			for (final PooledByteBuffer buffer : pooledBuffers) {
 				buffer.close();
 			}
@@ -447,6 +452,7 @@ public abstract class GettusBase<I> {
 
 		@Override
 		public void handleEvent(final StreamSinkChannel channel) {
+			logger.debug(String.format("WRITE BODY: EVENT"));
 			try {
 				final long remaining = Buffers.remaining(bufs);
 				long written = 0;
@@ -476,25 +482,38 @@ public abstract class GettusBase<I> {
 		}
 	}
 
-	private class StageWaitForResponse implements ClientCallback<ClientExchange> {
+	private class StageWaitForResponse implements ClientCallback<ClientExchange>, ChannelListener<StreamSourceChannel> {
 
 		private final Object resolver;
 		private final ClientConnection connection;
+		private final ClientExchange exchange;
 
-		public StageWaitForResponse(final Object resolver, final ClientConnection connection) {
+		public StageWaitForResponse(
+				final Object resolver, final ClientConnection connection, final ClientExchange exchange
+		) {
 			this.resolver = resolver;
 			this.connection = connection;
+			this.exchange = exchange;
 		}
 
 		@Override
 		public void completed(final ClientExchange exchange) {
+			exchange.getResponseChannel().getCloseSetter().set(null);
+			logger.debug(String.format("WAIT FOR RESPONSE: COMPLETED"));
 			resolve(resolver, createHeaders(connection, exchange, exchange.getResponse()));
 		}
 
 		@Override
 		public void failed(final IOException e) {
+			exchange.getResponseChannel().getCloseSetter().set(null);
+			logger.debug(String.format("WAIT FOR RESPONSE: FAILED %s", e));
 			release(connection);
 			resolveException(resolver, new GettusError(GettusBase.this, e));
+		}
+
+		@Override
+		public void handleEvent(final StreamSourceChannel channel) {
+			logger.debug("WAIT FOR RESPONSE: CLOSED");
 		}
 	}
 
@@ -580,12 +599,13 @@ public abstract class GettusBase<I> {
 		}
 
 		/**
-		 * Wait for the body. resolve/resolveError will be called when the body is downloaded or an error occus.
+		 * Wait for the body. resolve/resolveError will be called when the body is downloaded or an error occurs.
 		 *
 		 * @param worker
 		 * @param resolver Passed to resolve/resolveError
 		 */
 		void body(final Object resolver) {
+			logger.debug(String.format("BODY"));
 			final String contentLengthString =
 					exchange.getResponse().getResponseHeaders().getFirst(io.undertow.util.Headers.CONTENT_LENGTH);
 			final long contentLength;
@@ -627,6 +647,7 @@ public abstract class GettusBase<I> {
 			}
 
 			private void finish(final StreamSourceChannel channel) {
+				logger.debug(String.format("READ BODY: FINISH"));
 				if (resolver == null)
 					return;
 				try {
@@ -648,6 +669,7 @@ public abstract class GettusBase<I> {
 
 			@Override
 			public void handleEvent(final StreamSourceChannel channel) {
+				logger.debug(String.format("READ BODY: EVENT"));
 				final PooledByteBuffer pooled = bufferPool.allocate();
 				final ByteBuffer buffer = pooled.getBuffer();
 				try {
