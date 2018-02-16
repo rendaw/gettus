@@ -367,7 +367,7 @@ public abstract class GettusBase<I> {
 			return;
 		this.timeoutKey = worker.getIoThread().executeAfter(() -> {
 			resolveException(resolver, new GettusError(this, String.format("Request timeout")));
-		}, timeout, TimeUnit.SECONDS);
+		}, timeout, TimeUnit.MILLISECONDS);
 	}
 
 	private boolean extendTimeout(final XnioIoThread thread, final Object resolver) {
@@ -377,7 +377,7 @@ public abstract class GettusBase<I> {
 			return false;
 		this.timeoutKey = thread.executeAfter(() -> {
 			resolveException(resolver, new GettusError(this, String.format("Request timeout")));
-		}, timeout, TimeUnit.SECONDS);
+		}, timeout, TimeUnit.MILLISECONDS);
 		return true;
 	}
 
