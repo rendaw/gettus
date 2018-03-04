@@ -17,8 +17,8 @@ public class Gettus extends GettusBase<Gettus> {
 	 *
 	 * @param uri
 	 */
-	public Gettus(final URI uri) {
-		super(uri);
+	public Gettus(final XnioWorker worker, final URI uri) {
+		super(worker, uri);
 	}
 
 	@Override
@@ -61,9 +61,9 @@ public class Gettus extends GettusBase<Gettus> {
 	 * @param worker
 	 * @return a future for the headers of the response
 	 */
-	public CompletableFuture<Headers> send(final XnioWorker worker) {
+	public CompletableFuture<Headers> send() {
 		final CompletableFuture<Headers> out = new CompletableFuture<>();
-		send(worker, out);
+		send(out);
 		return out;
 	}
 }

@@ -19,8 +19,8 @@ public class Cogettus extends GettusBase<Cogettus> {
 	 *
 	 * @param uri
 	 */
-	public Cogettus(final URI uri) {
-		super(uri);
+	public Cogettus(final XnioWorker worker, final URI uri) {
+		super(worker, uri);
 	}
 
 	@Override
@@ -67,10 +67,10 @@ public class Cogettus extends GettusBase<Cogettus> {
 	 * @return response headers
 	 * @throws SuspendExecution
 	 */
-	public Headers send(final XnioWorker worker) throws SuspendExecution {
+	public Headers send() throws SuspendExecution {
 		final Coroutine coroutine = Coroutine.getActiveCoroutine();
 		return Coroutine.yieldThen(() -> {
-			send(worker, coroutine);
+			send(coroutine);
 		});
 	}
 }
