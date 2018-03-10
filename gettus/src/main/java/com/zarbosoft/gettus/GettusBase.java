@@ -305,6 +305,15 @@ public abstract class GettusBase<I> {
 	 * @param resolver Passed to resolve/resolveError
 	 */
 	public void send(final Object resolver) {
+		if (logger.isDebugEnabled()) {
+			logger.debug(String.format(
+					"SEND %s %s\nHeaders: %s\nBody: %s",
+					request.getMethod(),
+					uri,
+					request.getRequestHeaders(),
+					new String(body, StandardCharsets.UTF_8)
+			));
+		}
 		request
 				.getRequestHeaders()
 				.add(io.undertow.util.Headers.CONTENT_LENGTH, Objects.toString(body == null ? 0 : body.length));
@@ -547,7 +556,7 @@ public abstract class GettusBase<I> {
 				channel.suspendWrites();
 				clean(channel);
 			} catch (final Exception e) {
-				logger.debug(String.format("[%s] Error sending body", index), e);
+				logger.warn(String.format("[%s] Error sending body", index), e);
 				clean(channel);
 			}
 		}
@@ -772,7 +781,7 @@ public abstract class GettusBase<I> {
 						}
 					} while (true);
 				} catch (final Exception e) {
-					logger.debug(String.format("[%s] Error reading body", index), e);
+					logger.warn(String.format("[%s] Error reading body", index), e);
 				} finally {
 					pooled.close();
 				}
