@@ -311,7 +311,7 @@ public abstract class GettusBase<I> {
 					request.getMethod(),
 					uri,
 					request.getRequestHeaders(),
-					new String(body, StandardCharsets.UTF_8)
+					body == null ? "" : new String(body, StandardCharsets.UTF_8)
 			));
 		}
 		request
