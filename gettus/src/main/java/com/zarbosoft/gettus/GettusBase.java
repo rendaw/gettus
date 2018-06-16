@@ -366,7 +366,7 @@ public abstract class GettusBase<I> {
 							OptionMap.builder().set(UndertowOptions.IDLE_TIMEOUT, timeout).getMap()
 					);
 		} catch (final Exception e) {
-			throw new GettusError(this, e);
+			resolveException(resolver, new GettusError(this, e));
 		}
 	}
 
