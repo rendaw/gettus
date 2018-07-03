@@ -151,7 +151,7 @@ public abstract class GettusBase<I> {
 
 	public GettusBase(final XnioWorker worker, final URI uri) {
 		this.worker = worker;
-		this.index = count.getAndIncrement();
+		this.index = GettusBase.count.getAndIncrement();
 		this.uri = uri;
 		this.connectionKey = String.format("%s:%s", uri.getHost(), uri.getPort());
 		final StringBuilder path = new StringBuilder();
@@ -160,7 +160,7 @@ public abstract class GettusBase<I> {
 			path.append("?");
 			path.append(uri.getRawQuery());
 		}
-		request.setPath(path.toString());
+		this.request.setPath(path.toString());
 	}
 
 	/**
@@ -170,7 +170,7 @@ public abstract class GettusBase<I> {
 	 * @return
 	 */
 	public I method(final HttpString method) {
-		request.setMethod(method);
+		this.request.setMethod(method);
 		return (I) this;
 	}
 
@@ -194,7 +194,7 @@ public abstract class GettusBase<I> {
 	 */
 	public I bodyJson(final ObjectMapper jackson, final Object o) {
 		try {
-			return body(jackson.writeValueAsBytes(o));
+			return this.body(jackson.writeValueAsBytes(o));
 		} catch (final JsonProcessingException e) {
 			throw new RuntimeException(e);
 		}
@@ -207,7 +207,7 @@ public abstract class GettusBase<I> {
 	 * @return
 	 */
 	public I bodyJson(final Object o) {
-		return bodyJson(jackson, o);
+		return this.bodyJson(GettusBase.jackson, o);
 	}
 
 	/**
@@ -223,7 +223,7 @@ public abstract class GettusBase<I> {
 		} catch (final IOException e) {
 			throw uncheck(e);
 		}
-		return body(body.toByteArray());
+		return this.body(body.toByteArray());
 	}
 
 	/**
@@ -233,7 +233,7 @@ public abstract class GettusBase<I> {
 	 * @return
 	 */
 	public I headers(final Map<HttpString, String> headers) {
-		headers.forEach((k, v) -> request.getRequestHeaders().add(k, v));
+		headers.forEach((k, v) -> this.request.getRequestHeaders().add(k, v));
 		return (I) this;
 	}
 
@@ -245,7 +245,7 @@ public abstract class GettusBase<I> {
 	 * @return
 	 */
 	public I header(final HttpString name, final String value) {
-		request.getRequestHeaders().add(name, value);
+		this.request.getRequestHeaders().add(name, value);
 		return (I) this;
 	}
 
@@ -257,8 +257,7 @@ public abstract class GettusBase<I> {
 	 * @return
 	 */
 	public I basicAuth(final String user, final String password) {
-		return header(io.undertow.util.Headers.AUTHORIZATION, String.format(
-				"Basic %s",
+		return this.header(io.undertow.util.Headers.AUTHORIZATION, String.format("Basic %s",
 				Base64
 						.getEncoder()
 						.encodeToString(String.format("%s:%s", user, password).getBytes(StandardCharsets.US_ASCII))
@@ -266,10 +265,10 @@ public abstract class GettusBase<I> {
 	}
 
 	/**
-	 * Abort the operation if no progress occurs for this duration in seconds.  Note that the total time before the
+	 * Abort the operation if no progress occurs for this duration in milliseconds.  Note that the total time before the
 	 * request aborts may be longer than this value.
 	 *
-	 * @param seconds
+	 * @param milliseconds
 	 * @return
 	 */
 	public I timeout(final int seconds) {
@@ -305,32 +304,36 @@ public abstract class GettusBase<I> {
 	 * @param resolver Passed to resolve/resolveError
 	 */
 	public void send(final Object resolver) {
-		if (logger.isDebugEnabled()) {
-			logger.debug(String.format(
-					"SEND %s %s\nHeaders: %s\nBody: %s",
-					request.getMethod(),
-					uri,
-					request.getRequestHeaders(),
-					body == null ? "" : new String(body, StandardCharsets.UTF_8)
+		if (this.logger.isDebugEnabled()) {
+			this.logger.debug(String.format("SEND %s %s\nHeaders: %s\nBody: %s",
+					this.request.getMethod(),
+					this.uri,
+					this.request.getRequestHeaders(),
+					this.body == null ? "" : new String(this.body, StandardCharsets.UTF_8)
 			));
 		}
-		request
+		this.request
 				.getRequestHeaders()
-				.add(io.undertow.util.Headers.CONTENT_LENGTH, Objects.toString(body == null ? 0 : body.length));
+				.add(io.undertow.util.Headers.CONTENT_LENGTH,
+						Objects.toString(this.body == null ? 0 : this.body.length)
+				);
 		final SSLContext sslContext;
-		if (dontCheckCerts) {
+		if (this.dontCheckCerts) {
 			sslContext = uncheck(() -> SSLContext.getInstance("SSL"));
 			uncheck(() -> sslContext.init(null, new TrustManager[] {
 					new X509TrustManager() {
+						@Override
 						public X509Certificate[] getAcceptedIssuers() {
 							return new X509Certificate[0];
 						}
 
+						@Override
 						public void checkClientTrusted(
 								final X509Certificate[] certs, final String authType
 						) {
 						}
 
+						@Override
 						public void checkServerTrusted(
 								final X509Certificate[] certs, final String authType
 						) {
@@ -340,90 +343,91 @@ public abstract class GettusBase<I> {
 		} else {
 			sslContext = uncheck(() -> SSLContext.getDefault());
 		}
-		final XnioSsl ssl =
-				new UndertowXnioSsl(worker.getXnio(), OptionMap.create(Options.USE_DIRECT_BUFFERS, true), sslContext);
+		final XnioSsl ssl = new UndertowXnioSsl(this.worker.getXnio(),
+				OptionMap.create(Options.USE_DIRECT_BUFFERS, true),
+				sslContext
+		);
 		try {
-			initializeTimeout(resolver);
+			this.initializeTimeout(resolver);
 			do {
-				final ConcurrentDirectDeque<ClientConnection> queue = connectionPool.get(connectionKey);
+				final ConcurrentDirectDeque<ClientConnection> queue = GettusBase.connectionPool.get(this.connectionKey);
 				if (queue == null)
 					break;
 				final ClientConnection connection = queue.pollLast();
 				if (queue.isEmpty())
-					connectionPool.remove(queue); // Race condition, but missed connections should clean up eventually
+					GettusBase.connectionPool.remove(queue); // Race condition, but missed connections should clean up eventually
 				if (connection == null || !connection.isOpen())
 					break;
-				connection.sendRequest(request, new StageSendRequest(resolver, connection));
+				connection.sendRequest(this.request, new StageSendRequest(resolver, connection));
 				return;
 			} while (false);
 			UndertowClient.getInstance().
-					connect(
-							new StageGetConnection(resolver),
-							uri,
-							worker,
+					connect(new StageGetConnection(resolver),
+							this.uri,
+							this.worker,
 							ssl,
-							bufferPool,
-							OptionMap.builder().set(UndertowOptions.IDLE_TIMEOUT, timeout).getMap()
+							GettusBase.bufferPool,
+							OptionMap.builder().set(UndertowOptions.IDLE_TIMEOUT, this.timeout).getMap()
 					);
 		} catch (final Exception e) {
-			resolveException(resolver, new GettusError(this, e));
+			this.resolveException(resolver, new GettusError(this, e));
 		}
 	}
 
 	private void initializeTimeout(final Object resolver) {
-		if (timeout <= 0)
+		if (this.timeout <= 0)
 			return;
-		this.timeoutKey = worker.getIoThread().executeAfter(() -> {
-			resolveException(resolver, new GettusError(this, String.format("Request timeout")));
-		}, timeout, TimeUnit.MILLISECONDS);
+		this.timeoutKey = this.worker.getIoThread().executeAfter(() -> {
+			this.resolveException(resolver, new GettusError(this, String.format("Request timeout")));
+		}, this.timeout, TimeUnit.MILLISECONDS);
 	}
 
 	private boolean extendTimeout(final XnioIoThread thread, final Object resolver) {
-		if (timeout <= 0)
+		if (this.timeout <= 0)
 			return true;
-		if (timeoutKey != null && !timeoutKey.remove())
+		if (this.timeoutKey != null && !this.timeoutKey.remove())
 			return false;
 		this.timeoutKey = thread.executeAfter(() -> {
-			resolveException(resolver, new GettusError(this, String.format("Request timeout")));
-		}, timeout, TimeUnit.MILLISECONDS);
+			this.resolveException(resolver, new GettusError(this, String.format("Request timeout")));
+		}, this.timeout, TimeUnit.MILLISECONDS);
 		return true;
 	}
 
 	private boolean extendTimeout(final Object resolver) {
-		return extendTimeout(worker.getIoThread(), resolver);
+		return this.extendTimeout(this.worker.getIoThread(), resolver);
 	}
 
 	private void fatal(final ExecutorService executor, final Throwable e) {
-		logger.error("Uncaught error in executor; shutting down", e);
+		this.logger.error("Uncaught error in executor; shutting down", e);
 		executor.shutdown();
 	}
 
 	private void resolve1(final Object resolver, final Object value) {
-		if (timeoutKey != null) {
-			if (!timeoutKey.remove())
+		if (this.timeoutKey != null) {
+			if (!this.timeoutKey.remove())
 				return;
-			timeoutKey = null;
+			this.timeoutKey = null;
 		}
-		worker.submit(() -> {
+		this.worker.submit(() -> {
 			try {
-				resolve(resolver, value);
+				this.resolve(resolver, value);
 			} catch (final Throwable e) {
-				fatal(worker, e);
+				this.fatal(this.worker, e);
 			}
 		});
 	}
 
 	private void resolveException1(final Object resolver, final RuntimeException error) {
-		if (timeoutKey != null) {
-			if (!timeoutKey.remove())
+		if (this.timeoutKey != null) {
+			if (!this.timeoutKey.remove())
 				return;
-			timeoutKey = null;
+			this.timeoutKey = null;
 		}
-		worker.submit(() -> {
+		this.worker.submit(() -> {
 			try {
-				resolveException(resolver, error);
+				this.resolveException(resolver, error);
 			} catch (final Throwable e) {
-				fatal(worker, e);
+				this.fatal(this.worker, e);
 			}
 		});
 	}
@@ -438,14 +442,14 @@ public abstract class GettusBase<I> {
 
 		@Override
 		public void completed(final ClientConnection result) {
-			if (!extendTimeout(resolver))
+			if (!GettusBase.this.extendTimeout(this.resolver))
 				return;
-			result.sendRequest(request, new StageSendRequest(resolver, result));
+			result.sendRequest(GettusBase.this.request, new StageSendRequest(this.resolver, result));
 		}
 
 		@Override
 		public void failed(final IOException e) {
-			resolveException1(resolver, new GettusError(GettusBase.this, e));
+			GettusBase.this.resolveException1(this.resolver, new GettusError(GettusBase.this, e));
 		}
 	}
 
@@ -461,17 +465,17 @@ public abstract class GettusBase<I> {
 
 		@Override
 		public void completed(final ClientExchange exchange) {
-			if (!extendTimeout(resolver))
+			if (!GettusBase.this.extendTimeout(this.resolver))
 				return;
-			if (body != null) {
-				final ByteBuffer bytes = ByteBuffer.wrap(body);
+			if (GettusBase.this.body != null) {
+				final ByteBuffer bytes = ByteBuffer.wrap(GettusBase.this.body);
 				final StreamSinkChannel channel = exchange.getRequestChannel();
 				// If channel null means accidental double get
 				int i = 0;
 				ByteBuffer[] bufs = null;
 				PooledByteBuffer[] pooledBuffers = null;
 				while (bytes.hasRemaining()) {
-					final PooledByteBuffer pooled = bufferPool.allocate();
+					final PooledByteBuffer pooled = GettusBase.bufferPool.allocate();
 					// TODO should pooled be closed?
 					if (bufs == null) {
 						final int noBufs = (bytes.remaining() + pooled.getBuffer().remaining() - 1) /
@@ -485,16 +489,16 @@ public abstract class GettusBase<I> {
 					pooled.getBuffer().flip();
 					++i;
 				}
-				final StageWriteBody writeBody = new StageWriteBody(pooledBuffers, bufs, resolver);
+				final StageWriteBody writeBody = new StageWriteBody(pooledBuffers, bufs, this.resolver);
 				writeBody.handleEvent(channel);
 			}
-			exchange.setResponseListener(new StageWaitForResponse(resolver, connection, exchange));
+			exchange.setResponseListener(new StageWaitForResponse(this.resolver, this.connection, exchange));
 		}
 
 		@Override
 		public void failed(final IOException e) {
-			release(connection);
-			resolveException1(resolver, new GettusError(GettusBase.this, e));
+			GettusBase.this.release(this.connection);
+			GettusBase.this.resolveException1(this.resolver, new GettusError(GettusBase.this, e));
 		}
 	}
 
@@ -514,7 +518,7 @@ public abstract class GettusBase<I> {
 		}
 
 		private void clean(final StreamSinkChannel channel) {
-			for (final PooledByteBuffer buffer : pooledBuffers) {
+			for (final PooledByteBuffer buffer : this.pooledBuffers) {
 				buffer.close();
 			}
 
@@ -529,35 +533,35 @@ public abstract class GettusBase<I> {
 
 		@Override
 		public void handleEvent(final StreamSinkChannel channel) {
-			if (!extendTimeout(channel.getIoThread(), resolver)) {
-				clean(channel);
+			if (!GettusBase.this.extendTimeout(channel.getIoThread(), this.resolver)) {
+				this.clean(channel);
 				return;
 			}
 			try {
-				final long remaining = Buffers.remaining(bufs);
+				final long remaining = Buffers.remaining(this.bufs);
 				long written = 0;
 				do {
 					final long res;
 					try {
-						res = channel.write(bufs);
+						res = channel.write(this.bufs);
 					} catch (final IOException e) {
 						throw new GettusError(GettusBase.this, e);
 					}
 					written += res;
 					if (res == 0) {
-						if (first) {
+						if (this.first) {
 							channel.getWriteSetter().set(this);
 							channel.resumeWrites();
-							first = false;
+							this.first = false;
 						}
 						return;
 					}
 				} while (written < remaining);
 				channel.suspendWrites();
-				clean(channel);
+				this.clean(channel);
 			} catch (final Exception e) {
-				logger.warn(String.format("[%s] Error sending body", index), e);
-				clean(channel);
+				GettusBase.this.logger.warn(String.format("[%s] Error sending body", GettusBase.this.index), e);
+				this.clean(channel);
 			}
 		}
 	}
@@ -579,14 +583,16 @@ public abstract class GettusBase<I> {
 		@Override
 		public void completed(final ClientExchange exchange) {
 			exchange.getResponseChannel().getCloseSetter().set(null);
-			resolve1(resolver, createHeaders(connection, exchange, exchange.getResponse()));
+			GettusBase.this.resolve1(this.resolver,
+					GettusBase.this.createHeaders(this.connection, exchange, exchange.getResponse())
+			);
 		}
 
 		@Override
 		public void failed(final IOException e) {
-			exchange.getResponseChannel().getCloseSetter().set(null);
-			release(connection);
-			resolveException1(resolver, new GettusError(GettusBase.this, e));
+			this.exchange.getResponseChannel().getCloseSetter().set(null);
+			GettusBase.this.release(this.connection);
+			GettusBase.this.resolveException1(this.resolver, new GettusError(GettusBase.this, e));
 		}
 
 		@Override
@@ -616,7 +622,7 @@ public abstract class GettusBase<I> {
 		 * @return the response code
 		 */
 		public int code() {
-			return response.getResponseCode();
+			return this.response.getResponseCode();
 		}
 
 		/**
@@ -626,7 +632,7 @@ public abstract class GettusBase<I> {
 		 * @return
 		 */
 		public String header(final String name) {
-			return response.getResponseHeaders().getFirst(name);
+			return this.response.getResponseHeaders().getFirst(name);
 		}
 
 		/**
@@ -635,9 +641,9 @@ public abstract class GettusBase<I> {
 		 * @return
 		 */
 		public K check() {
-			if (code() < 200 || code() >= 400) {
-				close();
-				throw errorForCode();
+			if (this.code() < 200 || this.code() >= 400) {
+				this.close();
+				throw this.errorForCode();
 			}
 			return (K) this;
 		}
@@ -648,7 +654,7 @@ public abstract class GettusBase<I> {
 		 * @return
 		 */
 		public K close() {
-			release(connection);
+			GettusBase.this.release(this.connection);
 			return (K) this;
 		}
 
@@ -658,7 +664,7 @@ public abstract class GettusBase<I> {
 		 * @return
 		 */
 		public ResponseCodeError errorForCode() {
-			return new ResponseCodeError(code());
+			return new ResponseCodeError(this.code());
 		}
 
 		/**
@@ -668,9 +674,9 @@ public abstract class GettusBase<I> {
 		 * @return
 		 */
 		public K checkOnly(final int... codes) {
-			if (Arrays.stream(codes).anyMatch(c -> code() == c)) {
-				close();
-				throw errorForCode();
+			if (Arrays.stream(codes).anyMatch(c -> this.code() == c)) {
+				this.close();
+				throw this.errorForCode();
 			}
 			return (K) this;
 		}
@@ -683,7 +689,7 @@ public abstract class GettusBase<I> {
 		 */
 		void body(final Object resolver) {
 			final String contentLengthString =
-					exchange.getResponse().getResponseHeaders().getFirst(io.undertow.util.Headers.CONTENT_LENGTH);
+					this.exchange.getResponse().getResponseHeaders().getFirst(io.undertow.util.Headers.CONTENT_LENGTH);
 			final long contentLength;
 			final ByteArrayOutputStream body;
 			if (contentLengthString != null) {
@@ -696,15 +702,15 @@ public abstract class GettusBase<I> {
 				contentLength = -1;
 				body = new ByteArrayOutputStream();
 			}
-			if (limitSize > 0) {
-				if (contentLength > limitSize) {
+			if (GettusBase.this.limitSize > 0) {
+				if (contentLength > GettusBase.this.limitSize) {
 					throw new ResponseTooLargeError();
 				}
 			}
-			initializeTimeout(resolver);
+			GettusBase.this.initializeTimeout(resolver);
 			try {
-				final StreamSourceChannel channel = exchange.getResponseChannel();
-				uncheck(() -> channel.setOption(READ_TIMEOUT, timeout));
+				final StreamSourceChannel channel = this.exchange.getResponseChannel();
+				uncheck(() -> channel.setOption(READ_TIMEOUT, GettusBase.this.timeout));
 				new StageReadBody(resolver, body).handleEvent(channel);
 			} catch (final Exception e) {
 				throw new GettusError(GettusBase.this, e);
@@ -724,30 +730,30 @@ public abstract class GettusBase<I> {
 			}
 
 			private void finish(final StreamSourceChannel channel) {
-				if (resolver == null)
+				if (this.resolver == null)
 					return;
 				try {
 					final XnioWorker worker = channel.getWorker();
-					final Object resolver1 = resolver;
+					final Object resolver1 = this.resolver;
 					worker.submit(() -> {
 						try {
-							resolve1(resolver1, new Body(response, body));
+							GettusBase.this.resolve1(resolver1, new Body(Headers.this.response, this.body));
 						} catch (final Throwable t) {
-							logger.error("Unhandled exception, shutting down executor", t);
+							GettusBase.this.logger.error("Unhandled exception, shutting down executor", t);
 							worker.shutdown();
 						}
 					});
 				} finally {
-					close();
-					resolver = null;
+					Headers.this.close();
+					this.resolver = null;
 				}
 			}
 
 			@Override
 			public void handleEvent(final StreamSourceChannel channel) {
-				if (!extendTimeout(resolver))
+				if (!GettusBase.this.extendTimeout(this.resolver))
 					return;
-				final PooledByteBuffer pooled = bufferPool.allocate();
+				final PooledByteBuffer pooled = GettusBase.bufferPool.allocate();
 				final ByteBuffer buffer = pooled.getBuffer();
 				try {
 					do {
@@ -755,33 +761,33 @@ public abstract class GettusBase<I> {
 							buffer.clear();
 							final int res = channel.read(buffer);
 							if (res == -1) {
-								finish(channel);
+								this.finish(channel);
 								return;
 							} else if (res == 0) {
-								if (first) {
+								if (this.first) {
 									channel.getReadSetter().set(this);
 									channel.resumeReads();
-									first = false;
+									this.first = false;
 								}
 								return;
 							} else {
 								buffer.flip();
 								while (buffer.hasRemaining()) {
-									body.write(buffer.get());
+									this.body.write(buffer.get());
 								}
-								if (limitSize > 0 && body.size() > limitSize) {
-									resolveException1(resolver, new ResponseTooLargeError());
-									resolver = null;
+								if (GettusBase.this.limitSize > 0 && this.body.size() > GettusBase.this.limitSize) {
+									GettusBase.this.resolveException1(this.resolver, new ResponseTooLargeError());
+									this.resolver = null;
 									return;
 								}
 							}
 						} catch (final IOException e) {
-							resolveException1(resolver, new GettusError(GettusBase.this, e));
+							GettusBase.this.resolveException1(this.resolver, new GettusError(GettusBase.this, e));
 							return;
 						}
 					} while (true);
 				} catch (final Exception e) {
-					logger.warn(String.format("[%s] Error reading body", index), e);
+					GettusBase.this.logger.warn(String.format("[%s] Error reading body", GettusBase.this.index), e);
 				} finally {
 					pooled.close();
 				}
@@ -809,7 +815,7 @@ public abstract class GettusBase<I> {
 		 * @return
 		 */
 		public int code() {
-			return response.getResponseCode();
+			return this.response.getResponseCode();
 		}
 
 		/**
@@ -819,7 +825,7 @@ public abstract class GettusBase<I> {
 		 * @return
 		 */
 		public String header(final String name) {
-			return response.getResponseHeaders().getFirst(name);
+			return this.response.getResponseHeaders().getFirst(name);
 		}
 
 		/**
@@ -828,17 +834,17 @@ public abstract class GettusBase<I> {
 		 * @return
 		 */
 		public InputStream stream() {
-			return new ByteArrayInputStream(body.toByteArray());
+			return new ByteArrayInputStream(this.body.toByteArray());
 		}
 
 		/**
 		 * @return the charset if specified in the headers, otherwise null.
 		 */
 		public Charset explicitCharset() {
-			final String header = response.getResponseHeaders().getFirst(io.undertow.util.Headers.CONTENT_TYPE);
+			final String header = this.response.getResponseHeaders().getFirst(io.undertow.util.Headers.CONTENT_TYPE);
 			if (header == null)
 				return null;
-			final Matcher matcher = charsetPattern.matcher(header);
+			final Matcher matcher = GettusBase.charsetPattern.matcher(header);
 			if (!matcher.find())
 				return null;
 			try {
@@ -852,7 +858,7 @@ public abstract class GettusBase<I> {
 		 * @return a best guess about the document charset
 		 */
 		public Charset charset() {
-			final Charset charset = explicitCharset();
+			final Charset charset = this.explicitCharset();
 			if (charset != null)
 				return charset;
 			return Charset.forName("ISO-8859-1");
@@ -862,7 +868,7 @@ public abstract class GettusBase<I> {
 		 * @return the body as a string
 		 */
 		public String text() {
-			return new String(body.toByteArray(), charset());
+			return new String(this.body.toByteArray(), this.charset());
 		}
 
 		/**
@@ -874,7 +880,7 @@ public abstract class GettusBase<I> {
 		 */
 		public <T> T json(final Class<T> klass) {
 			try {
-				return jackson.readValue(stream(), klass);
+				return GettusBase.jackson.readValue(this.stream(), klass);
 			} catch (final IOException e) {
 				throw new GettusError(GettusBase.this, e);
 			}
@@ -887,7 +893,7 @@ public abstract class GettusBase<I> {
 		 */
 		public JsonNode json() {
 			try {
-				return jackson.readTree(stream());
+				return GettusBase.jackson.readTree(this.stream());
 			} catch (final IOException e) {
 				throw new GettusError(GettusBase.this, e);
 			}
@@ -899,8 +905,8 @@ public abstract class GettusBase<I> {
 		 * @return
 		 */
 		public Body check() {
-			if (code() < 200 || code() >= 400) {
-				throw new ResponseCodeError(code(), new String(body.toByteArray(), StandardCharsets.UTF_8));
+			if (this.code() < 200 || this.code() >= 400) {
+				throw new ResponseCodeError(this.code(), new String(this.body.toByteArray(), StandardCharsets.UTF_8));
 			}
 			return this;
 		}
@@ -908,6 +914,8 @@ public abstract class GettusBase<I> {
 
 	private void release(final ClientConnection connection) {
 		if (connection.isOpen())
-			connectionPool.computeIfAbsent(connectionKey, k -> new FastConcurrentDirectDeque<>()).addLast(connection);
+			GettusBase.connectionPool
+					.computeIfAbsent(this.connectionKey, k -> new FastConcurrentDirectDeque<>())
+					.addLast(connection);
 	}
 }
