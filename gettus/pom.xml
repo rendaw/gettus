@@ -1,4 +1,5 @@
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>com.zarbosoft</groupId>
@@ -26,6 +27,28 @@
         <developerConnection>scm:git:ssh://github.com:rendaw/gettus.git</developerConnection>
         <url>http://github.com/rendaw/gettus/tree/master</url>
     </scm>
+    <dependencies>
+        <dependency>
+            <groupId>io.undertow</groupId>
+            <artifactId>undertow-core</artifactId>
+            <version>2.0.14.Final</version>
+        </dependency>
+        <dependency>
+            <groupId>com.zarbosoft.rendaw</groupId>
+            <artifactId>common</artifactId>
+            <version>1.0.0</version>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <version>1.7.24</version>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <version>2.9.5</version>
+        </dependency>
+    </dependencies>
     <distributionManagement>
         <snapshotRepository>
             <id>ossrh</id>
@@ -76,7 +99,7 @@
     </build>
     <profiles>
         <profile>
-            <id>release</id>
+            <id>prerelease</id>
             <build>
                 <plugins>
                     <plugin>
@@ -133,9 +156,16 @@
                             </execution>
                         </executions>
                         <configuration>
-                            <keyname>6BCEF033E4F4B3249D39EAB8C4D1C55B9F0D7F77</keyname>
+                            <keyname>42439C055D7D7C9D056A5648BF6FAF8B3E8AF437</keyname>
                         </configuration>
                     </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <profile>
+            <id>release</id>
+            <build>
+                <plugins>
                     <plugin>
                         <groupId>org.sonatype.plugins</groupId>
                         <artifactId>nexus-staging-maven-plugin</artifactId>
@@ -151,26 +181,4 @@
             </build>
         </profile>
     </profiles>
-    <dependencies>
-        <dependency>
-            <groupId>io.undertow</groupId>
-            <artifactId>undertow-core</artifactId>
-            <version>2.0.14.Final</version>
-        </dependency>
-        <dependency>
-            <groupId>com.zarbosoft.rendaw</groupId>
-            <artifactId>common</artifactId>
-            <version>1.0.0</version>
-        </dependency>
-        <dependency>
-            <groupId>org.slf4j</groupId>
-            <artifactId>slf4j-api</artifactId>
-            <version>1.7.24</version>
-        </dependency>
-        <dependency>
-            <groupId>com.fasterxml.jackson.core</groupId>
-            <artifactId>jackson-databind</artifactId>
-            <version>2.9.5</version>
-        </dependency>
-    </dependencies>
 </project>

@@ -43,7 +43,7 @@ public class Gettus extends GettusBase<Gettus> {
 		 */
 		public CompletableFuture<Body> body() {
 			final CompletableFuture<Body> out = new CompletableFuture<>();
-			body(out);
+			this.body(out);
 			return out;
 		}
 	}
@@ -58,12 +58,11 @@ public class Gettus extends GettusBase<Gettus> {
 	/**
 	 * Send the request
 	 *
-	 * @param worker
 	 * @return a future for the headers of the response
 	 */
 	public CompletableFuture<Headers> send() {
 		final CompletableFuture<Headers> out = new CompletableFuture<>();
-		send(out);
+		this.send(out);
 		return out;
 	}
 }

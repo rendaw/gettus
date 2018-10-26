@@ -1,4 +1,5 @@
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>com.zarbosoft</groupId>
@@ -90,7 +91,9 @@
                         <phase>test-compile</phase>
                         <configuration>
                             <tasks>
-                                <taskdef name="instrumentationTask" classname="com.zarbosoft.coroutinescore.instrument.InstrumentationTask" classpathref="maven.dependency.classpath"/>
+                                <taskdef name="instrumentationTask"
+                                         classname="com.zarbosoft.coroutinescore.instrument.InstrumentationTask"
+                                         classpathref="maven.dependency.classpath"/>
                                 <instrumentationTask verbose="true">
                                     <fileset dir="${project.build.directory}/classes/" includes="**/*.class"/>
                                 </instrumentationTask>
@@ -175,7 +178,7 @@
                             </execution>
                         </executions>
                         <configuration>
-                            <keyname>6BCEF033E4F4B3249D39EAB8C4D1C55B9F0D7F77</keyname>
+                            <keyname>42439C055D7D7C9D056A5648BF6FAF8B3E8AF437</keyname>
                         </configuration>
                     </plugin>
                     <plugin>
