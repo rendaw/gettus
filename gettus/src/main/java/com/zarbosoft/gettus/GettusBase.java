@@ -268,7 +268,7 @@ public abstract class GettusBase<I> {
 	 * Abort the operation if no progress occurs for this duration in milliseconds.  Note that the total time before the
 	 * request aborts may be longer than this value.
 	 *
-	 * @param milliseconds
+	 * @param seconds
 	 * @return
 	 */
 	public I timeout(final int seconds) {
@@ -300,7 +300,6 @@ public abstract class GettusBase<I> {
 	/**
 	 * Send the request. resolve/resolveError will be called when the headers are downloaded or an error occus.
 	 *
-	 * @param worker
 	 * @param resolver Passed to resolve/resolveError
 	 */
 	public void send(final Object resolver) {
@@ -684,7 +683,6 @@ public abstract class GettusBase<I> {
 		/**
 		 * Wait for the body. resolve/resolveError will be called when the body is downloaded or an error occurs.
 		 *
-		 * @param worker
 		 * @param resolver Passed to resolve/resolveError
 		 */
 		void body(final Object resolver) {
