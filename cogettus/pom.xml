@@ -1,10 +1,9 @@
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>com.zarbosoft</groupId>
     <artifactId>cogettus</artifactId>
-    <version>0.0.6</version>
+    <version>0.0.7</version>
     <name>${project.groupId}:${project.artifactId}</name>
     <description>Asynchronous HTTP requests library for XNIO with coroutines</description>
     <url>https://github.com/rendaw/gettus</url>
@@ -91,9 +90,7 @@
                         <phase>test-compile</phase>
                         <configuration>
                             <tasks>
-                                <taskdef name="instrumentationTask"
-                                         classname="com.zarbosoft.coroutinescore.instrument.InstrumentationTask"
-                                         classpathref="maven.dependency.classpath"/>
+                                <taskdef name="instrumentationTask" classname="com.zarbosoft.coroutinescore.instrument.InstrumentationTask" classpathref="maven.dependency.classpath"/>
                                 <instrumentationTask verbose="true">
                                     <fileset dir="${project.build.directory}/classes/" includes="**/*.class"/>
                                 </instrumentationTask>

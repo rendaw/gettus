@@ -32,7 +32,7 @@ Gettus:
 <dependency>
     <groupId>com.zarbosoft</groupId>
     <artifactId>gettus</artifactId>
-    <version>0.0.6</version>
+    <version>0.0.7</version>
 </dependency>
 ```
 
@@ -41,6 +41,6 @@ Cogettus
 <dependency>
     <groupId>com.zarbosoft</groupId>
     <artifactId>cogettus</artifactId>
-    <version>0.0.6</version>
+    <version>0.0.7</version>
 </dependency>
 ```
