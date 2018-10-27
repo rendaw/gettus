@@ -3,7 +3,7 @@
 
     <groupId>com.zarbosoft</groupId>
     <artifactId>gettus</artifactId>
-    <version>0.0.9</version>
+    <version>0.0.10</version>
     <name>${project.groupId}:${project.artifactId}</name>
     <description>Asynchronous HTTP requests library for XNIO</description>
     <url>https://github.com/rendaw/gettus</url>
